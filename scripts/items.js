@@ -1,6 +1,28 @@
 const PRODUCTS = [];
 const CATEGORIES = [];
-var CURRENT_SECTION = "ALL"
+var CURRENT_SECTION = "ALL";
+const MAX_CATEGORIES = 5;
+
+// Función para crear secciones de categorías
+function createCategorySection(container, category) {
+    const section = document.createElement('button');
+    section.textContent = category;
+    section.classList.add("py-1", "px-5", "border", "border-gray-400", "text-gray-400", "rounded-full", "hover:bg-green-200", "hover:text-black");
+
+    section.addEventListener('click', () => {
+        displaySection(`${category}Items`);
+    });
+    container.append(section);
+
+    const itemsSection = document.getElementById('items-section');
+    const div = document.createElement('div');
+
+    div.id = `${category}Items`;
+    div.classList.add("w-full", "hidden", "grid", "grid-cols-1", "md:grid-cols-2", "lg:grid-cols-3", "gap-5");
+    itemsSection.append(div);
+
+    CATEGORIES.push(category);
+}
 
 // Función principal para cargar productos
 async function loadProducts() {
@@ -17,8 +39,14 @@ async function loadProducts() {
         const itemsContainer = document.getElementById('items-header');
 
         // Obtener categorías y crear secciones
-        const categories = [...new Set(rows.map(row => row.c[2]?.v || "").filter(Boolean))];
-        categories.forEach(category => createCategorySection(itemsContainer, category));
+        const cat = [...new Set(rows.map(row => row.c[2]?.v || "").filter(Boolean))];
+        cat.forEach(category => {
+            if (PLAN == 'Básico' && (CATEGORIES.length + 1) > MAX_CATEGORIES) {
+                console.warn("Superaste el límite de categorías, adquiere el plan 'Pro' para quitar limitación.");
+            } else {
+                createCategorySection(itemsContainer, category);
+            }
+        });
 
         // Límite de productos
         let itemsCount = 0;
@@ -27,10 +55,10 @@ async function loadProducts() {
         // Crear tarjetas de productos
         rows.forEach(row => {
             const rowData = row.c.map(cell => cell?.v || "");
-            const [id, nombre, categoria, , disponible, descripcion, precio, imagenUrl] = rowData;
+            const [id, nombre, categoria, variedades, disponible, descripcion, precio, imagenUrl] = rowData;
 
             if (categoria && disponible === "Si" && canLoad) {
-                const product = { id, nombre, categoria, descripcion, precio, imagenUrl };
+                const product = { id, nombre, categoria, descripcion, precio, imagenUrl, variedades };
                 PRODUCTS.push(product);
 
                 preloadImage(imagenUrl);
@@ -48,72 +76,27 @@ async function loadProducts() {
     }
 
     document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
-        if(isInCart(btn.id)) {
-            const txt = document.getElementById(btn.id + "-txt")
-            const button = document.getElementById(btn.id)
-            txt.textContent = "Quitar del Carrito"
-            button.classList.add("bg-red-600", "hover:bg-red-700")
+        if (isInCart(btn.id)) {
+            const txt = document.getElementById(btn.id + "-txt");
+            const button = document.getElementById(btn.id);
+            txt.textContent = "Quitar del Carrito";
+            button.classList.add("bg-red-600", "hover:bg-red-700");
         }
         btn.addEventListener('click', () => {
-            if(isInCart(btn.id)) {
-                removeFromCart(btn.id)
+            if (isInCart(btn.id)) {
+                removeFromCart(btn.id);
             } else {
-                addToCart(btn.id)
+                addToCart(btn.id);
             }
         });
     });
 
-    displaySection(CURRENT_SECTION)
+    displaySection(CURRENT_SECTION);
 }
-
-// Crear secciones de categorías
-function createCategorySection(container, category) {
-    const section = document.createElement('button')
-    section.textContent = category;
-    section.classList.add("py-1", "px-5", "border", "border-gray-400", "text-gray-400", "rounded-full", "hover:bg-green-200", "hover:text-black")
-    
-    section.addEventListener('click', () => {
-        displaySection(`${category}Items`)
-    })
-    container.append(section)
-
-    const itemsSection = document.getElementById('items-section')
-    const div = document.createElement('div')
-
-    div.id = `${category}Items`
-    div.classList.add("w-full","hidden", "grid", "grid-cols-1", "md:grid-cols-2", "lg:grid-cols-3", "gap-5")
-    itemsSection.append(div)
-
-    CATEGORIES.push(category)
-    /*
-    const section = document.createElement('section');
-    section.classList.add('pb-2');
-
-    const categoryItems = document.createElement('div');
-    categoryItems.id = `${category}Items`;
-    categoryItems.classList.add("hidden", "grid", "grid-cols-1", "md:grid-cols-2", "lg:grid-cols-3", "max-w-[85%]", "w-full", "mx-auto", "gap-10", "mt-10");
-
-    const headerDiv = document.createElement('div');
-    headerDiv.classList.add("py-3", "bg-primary", "text-xl", "text-white", "text-center", "font-semibold", "flex", "justify-center", "items-center", "gap-2");
-
-    headerDiv.innerHTML = `<p>${category}</p><ion-icon onclick="toggleSection(this, '${category}Items')" name="caret-down-outline" class="hover:text-secondary cursor-pointer"></ion-icon>`;
-
-    section.append(headerDiv, categoryItems);
-    container.append(section);
-    */
-}
-
-// Pre-cargar imágenes
-function preloadImage(url) {
-    fetch(url)
-        .then(response => response.blob())
-        .then(blob => URL.createObjectURL(blob))
-        .catch(err => console.error("Error precargando imagen:", err));
-}
-
-// Crear tarjeta de producto
+// Crear tarjeta de producto con variedades
 function createProductCard(category, product) {
     const mainSection = document.getElementById(`${category}Items`);
+    if (mainSection == null) return;
     const mainDiv = document.createElement('div');
     mainDiv.classList.add("flex", "items-center", "justify-center", "px-2");
 
@@ -132,22 +115,36 @@ function createProductCard(category, product) {
         <p class='text-xl font-bold text-[#0FB478]'>${product.precio}</p>
         <p class='text-[#7C7C80] font-[15px] mt-6'>${product.descripcion}</p>`;
 
+    // Agregar opciones de variedades si existen y son una cadena
+    if (typeof product.variedades === 'string' && product.variedades !== "No") {
+        const varieties = product.variedades.split("|").map(variedad => variedad.split("-"));
+        varieties.forEach(([name, price]) => {
+            const varietyOption = document.createElement("div");
+            varietyOption.classList.add("flex", "items-center", "justify-between", "my-2");
+            varietyOption.innerHTML = `
+                <label>${name}</label>
+                <span class="text-[#0FB478] font-semibold">+${price}</span>
+                <input type="checkbox" class="variety-checkbox" data-price="${price}" />`;
+            fourthDiv.append(varietyOption);
+        });
+    }
+
     if (PLAN !== "Básico") {
         const cartDiv = document.createElement('div');
-        cartDiv.id = product.id
-        cartDiv.classList.add("flex", "justify-center", "items-center", "gap-2", "cursor-pointer","add-to-cart-btn", "w-full", "bg-green-500", "hover:bg-green-600", "mt-10", "py-3", "rounded-md", "text-white");
+        cartDiv.id = product.id;
+        cartDiv.classList.add("flex", "justify-center", "items-center", "gap-2", "cursor-pointer", "add-to-cart-btn", "w-full", "bg-green-500", "hover:bg-green-600", "mt-10", "py-3", "rounded-md", "text-white");
 
         const icon = document.createElement('ion-icon');
-        icon.name = "bag-add-outline"
-        icon.classList.add("text-2xl", "font-bold")
+        icon.name = "bag-add-outline";
+        icon.classList.add("text-2xl", "font-bold");
 
         const txt = document.createElement('p');
-        txt.id = product.id + "-txt"
-        txt.textContent = "Agregar al Carrito"
+        txt.id = product.id + "-txt";
+        txt.textContent = "Agregar al Carrito";
 
-        cartDiv.append(icon)
-        cartDiv.append(txt)
-        fourthDiv.append(cartDiv)
+        cartDiv.append(icon);
+        cartDiv.append(txt);
+        fourthDiv.append(cartDiv);
     }
 
     thirdDiv.append(fourthDiv);
@@ -156,39 +153,38 @@ function createProductCard(category, product) {
     mainSection.append(mainDiv);
 }
 
-// Agregar al carrito
+
+// Pre-cargar imágenes
+function preloadImage(url) {
+    fetch(url)
+        .then(response => response.blob())
+        .then(blob => URL.createObjectURL(blob))
+        .catch(err => console.error("Error precargando imagen:", err));
+}
+
+// Agregar al carrito con precio total de variedades
 function addToCart(productId) {
     const item = {
         id: productId,
         precio: 1,
-        cantidad: 1 // Inicializar cantidad en 1
+        cantidad: 1
     };
     const carrito = JSON.parse(localStorage.getItem(`${NAME}-Cart`)) || [];
     carrito.push(item);
+
+    // Calcular precio de variedades seleccionadas
+    const selectedVarieties = document.querySelectorAll(`#${productId} .variety-checkbox:checked`);
+    let varietyTotal = 0;
+    selectedVarieties.forEach(variety => {
+        varietyTotal += parseFloat(variety.dataset.price);
+    });
+    item.precio += varietyTotal;
+
     localStorage.setItem(`${NAME}-Cart`, JSON.stringify(carrito));
 
-    const txt = document.getElementById(productId + "-txt")
-    const btn = document.getElementById(productId)
-    txt.textContent = "Quitar del Carrito"
-    btn.classList.add("bg-red-600", "hover:bg-red-700")
+    const txt = document.getElementById(productId + "-txt");
+    const btn = document.getElementById(productId);
+    txt.textContent = "Quitar del Carrito";
+    btn.classList.add("bg-red-600", "hover:bg-red-700");
 }
-
-function isInCart(productId) {
-    const carrito = JSON.parse(localStorage.getItem(`${NAME}-Cart`)) || [];
-    return carrito.some(item => item.id === productId);
-}
-
-function removeFromCart(productId) {
-    var carrito = JSON.parse(localStorage.getItem(`${NAME}-Cart`)) || [];
-    carrito = carrito.filter(product => product.id !== productId);
-
-    // Actualiza el carrito en localStorage
-    localStorage.setItem(`${NAME}-Cart`, JSON.stringify(carrito));
-
-    const txt = document.getElementById(productId + "-txt")
-    const btn = document.getElementById(productId)
-    txt.textContent = "Agregar al Carrito"
-    btn.classList.remove("bg-red-600", "hover:bg-red-700")
-}
-
 document.addEventListener('DOMContentLoaded', loadProducts);
